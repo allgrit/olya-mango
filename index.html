@@ -202,7 +202,7 @@ let teeth=[];           // состояния зубов: 'healthy'|'chipped'|'c
 let state='menu';       // menu|playing|biting|perk|over
 let mangoNo=1, score=0, eaten=0;
 let pwr=0, pwrDir=1, pwrSpeed=1.1;   // полоска силы 0..1 качается
-let aimX=0.5;           // прицел по манго (0..1 по ширине манго)
+let aimX=0.5, aimY=0.5; // прицел по манго (0..1), 0.5 — центр
 let perks={ enamel:0, careful:0, ripe:0, accuracy:0 };  // накопленные перки
 
 // геометрия манго (центр экрана)
@@ -225,33 +225,34 @@ function startMango(){
   mangoHardBase = Math.max(0.7, mangoHardBase);
   biteMarks=[]; particles=[]; floaters=[]; stuckTeeth=[];
   pwr=0; pwrDir=1; pwrSpeed = 1.1 - perks.careful*0.16; pwrSpeed=Math.max(0.5,pwrSpeed);
-  aimX=0.5; jaw=0; jawTarget=0;
+  aimX=0.5; aimY=0.5; jaw=0; jawTarget=0;
   state='playing';
   updateHUD();
 }
 
-// твёрдость зоны по прицелу (0..1): центр = косточка
-function hardnessAt(ax){
-  const d=Math.abs(ax-0.5)*2;          // 0 центр .. 1 край
-  // косточка в центре (d<0.28): очень твёрдо; мякоть середина; кожура у края
+// расстояние от центра манго (радиально, 0 центр .. 1 край)
+function radial(ax,ay){ const dx=(ax-0.5)*2, dy=((ay==null?0.5:ay)-0.5)*2; return Math.min(1.2,Math.hypot(dx,dy)); }
+// твёрдость зоны по прицелу (0..1): центр = косточка, вокруг мякоть, край кожура
+function hardnessAt(ax,ay){
+  const d=radial(ax,ay);
   let h;
-  if(d<0.26) h = 0.95 - d*0.3;          // косточка
-  else if(d>0.82) h = 0.34 + (d-0.82)*0.4; // кожура
-  else h = 0.16 + Math.abs(d-0.5)*0.1;  // мякоть
+  if(d<0.34) h = 0.95 - d*0.25;          // косточка в середине
+  else if(d>0.84) h = 0.34 + (d-0.84)*0.5; // кожура у края
+  else h = 0.16 + Math.abs(d-0.58)*0.12;  // сочная мякоть
   return clamp(h*mangoHardBase, 0.05, 1.1);
 }
-function fleshAt(ax){  // сколько мякоти можно откусить (центр-косточка = мало)
-  const d=Math.abs(ax-0.5)*2;
-  if(d<0.24) return 0.06;               // косточка — есть нечего
-  if(d>0.9) return 0.4;                 // кожура
+function fleshAt(ax,ay){  // сколько мякоти можно откусить (центр-косточка = мало)
+  const d=radial(ax,ay);
+  if(d<0.3) return 0.06;                 // косточка — есть нечего
+  if(d>0.92) return 0.4;                 // кожура
   return 1.0;
 }
-// текущий зуб по прицелу
+// текущий зуб по прицелу (зубы стоят в ряд — выбираем по X)
 function toothAt(ax){ return clamp(Math.floor(ax*TEETH),0,TEETH-1); }
 
 // риск поломки зуба за укус при данных power+aim
-function biteRisk(power, ax){
-  const h=hardnessAt(ax); const ti=toothAt(ax); const st=teeth[ti];
+function biteRisk(power, ax, ay){
+  const h=hardnessAt(ax,ay); const ti=toothAt(ax); const st=teeth[ti];
   if(st==='diamond') return 0;
   const stateMult = st==='healthy'?1 : st==='chipped'?1.5 : st==='cracked'?2.5 : 0.0;
   if(st==='broken') return 0; // сломанный зуб не кусает
@@ -268,7 +269,7 @@ function updateHUD(){
   const row=$('teethRow'); row.innerHTML='';
   for(const t of teeth){ const d=document.createElement('div'); d.className='tooth-ic '+(t==='healthy'?'':t); row.appendChild(d); }
   // текущий риск
-  const r=biteRisk(pwr,aimX);
+  const r=biteRisk(pwr,aimX,aimY);
   const lbl=$('riskLbl');
   if(state!=='playing'){ lbl.textContent='—'; lbl.style.color='#ffe8d8'; }
   else{ const pct=Math.round(r*100); lbl.textContent=pct+'%';
@@ -282,18 +283,18 @@ function showToast(txt,color){ const t=$('toast'); t.textContent=txt; t.style.co
 // ===================== УКУС =====================
 function doBite(){
   if(state!=='playing') return;
-  const power=pwr, ax=aimX;
-  const ti=toothAt(ax), h=hardnessAt(ax);
+  const power=pwr, ax=aimX, ay=aimY;
+  const ti=toothAt(ax), h=hardnessAt(ax,ay);
   state='biting'; jawTarget=1;
-  const box=mangoBox(); const bx=box.cx+(ax-0.5)*box.w*0.8, by=box.cy+rnd(-box.h*0.12,box.h*0.12);
+  const box=mangoBox(); const bx=box.cx+(ax-0.5)*box.w*0.7, by=box.cy+(ay-0.5)*box.h*0.62;
   lastBite={x:bx,y:by,ti,power,ax,t:0};
 
   // через момент смыкания — результат
-  setTimeout(()=>resolveBite(power,ax,ti,h,bx,by), 170);
+  setTimeout(()=>resolveBite(power,ax,ay,ti,h,bx,by), 170);
 }
-function resolveBite(power,ax,ti,h,bx,by){
+function resolveBite(power,ax,ay,ti,h,bx,by){
   const st=teeth[ti];
-  const flesh=fleshAt(ax);
+  const flesh=fleshAt(ax,ay);
   // сколько съели
   const gained = power * 16 * flesh * (1+perks.accuracy*0.3);
   if(flesh>0.2){ eaten=Math.min(100, eaten+gained);
@@ -308,9 +309,9 @@ function resolveBite(power,ax,ti,h,bx,by){
   // проверка зуба
   let result='safe';
   if(st!=='broken' && st!=='diamond'){
-    const risk=biteRisk(power,ax);
+    const risk=biteRisk(power,ax,ay);
     if(Math.random()<risk){
-      const severity = power*0.55 + h*0.6 + (Math.abs(ax-0.5)<0.13?0.4:0);
+      const severity = power*0.55 + h*0.6 + (radial(ax,ay)<0.32?0.4:0);
       if(st==='cracked' || severity>0.95){
         teeth[ti]='broken';
         // драматичный исход: при сильном укусе зуб вырывается и остаётся в манго
@@ -439,18 +440,18 @@ function drawScene(){
   drawTeeth(box, loJawY, false);
   drawLip(box.cx, loJawY+90 + jx*30, box.w*1.7, 80, false);
 
-  // прицел
+  // прицел (двигается по манго в 2D)
   if(state==='playing'){
-    const px=box.cx+(aimX-0.5)*box.w*0.8;
+    const px=box.cx+(aimX-0.5)*box.w*0.7, py=box.cy+(aimY-0.5)*box.h*0.62;
     ctx.strokeStyle='rgba(255,255,255,.85)'; ctx.lineWidth=3;
-    ctx.beginPath(); ctx.arc(px,box.cy,16+Math.sin(perfNow()*0.006)*3,0,7); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(px-24,box.cy); ctx.lineTo(px-8,box.cy); ctx.moveTo(px+8,box.cy); ctx.lineTo(px+24,box.cy);
-    ctx.moveTo(px,box.cy-24); ctx.lineTo(px,box.cy-8); ctx.moveTo(px,box.cy+8); ctx.lineTo(px,box.cy+24); ctx.stroke();
+    ctx.beginPath(); ctx.arc(px,py,16+Math.sin(perfNow()*0.006)*3,0,7); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(px-24,py); ctx.lineTo(px-8,py); ctx.moveTo(px+8,py); ctx.lineTo(px+24,py);
+    ctx.moveTo(px,py-24); ctx.lineTo(px,py-8); ctx.moveTo(px,py+8); ctx.lineTo(px,py+24); ctx.stroke();
     // подсказка зоны
-    const h=hardnessAt(aimX);
+    const h=hardnessAt(aimX,aimY);
     ctx.fillStyle = h>0.7?'rgba(255,90,58,.9)': h>0.4?'rgba(255,180,70,.9)':'rgba(126,227,126,.9)';
     ctx.font='bold 13px Segoe UI'; ctx.textAlign='center';
-    ctx.fillText(h>0.7?'⚠ КОСТОЧКА':h>0.45?'кожура':'🍑 мякоть', px, box.cy-30);
+    ctx.fillText(h>0.7?'⚠ КОСТОЧКА':h>0.45?'кожура':'🍑 мякоть', px, py-30);
   }
   ctx.restore();
 
@@ -600,8 +601,13 @@ requestAnimationFrame(loop);
 // ===================== УПРАВЛЕНИЕ =====================
 const isTouch=matchMedia('(pointer: coarse)').matches;
 function setAim(e){ if(state!=='playing') return; const r=cv.getBoundingClientRect();
-  const t=(e.touches&&e.touches[0])||e; const x=t.clientX-r.left; const box=mangoBox();
-  aimX=clamp(0.5+(x-box.cx)/(box.w*0.8),0,1); }
+  const t=(e.touches&&e.touches[0])||e; const x=t.clientX-r.left, y=t.clientY-r.top; const box=mangoBox();
+  aimX = 0.5 + (x-box.cx)/(box.w*0.7);
+  aimY = 0.5 + (y-box.cy)/(box.h*0.62);
+  // держим прицел в пределах манго (радиально)
+  let dx=(aimX-0.5)*2, dy=(aimY-0.5)*2; const rr=Math.hypot(dx,dy);
+  if(rr>0.95){ dx=dx/rr*0.95; dy=dy/rr*0.95; aimX=0.5+dx/2; aimY=0.5+dy/2; }
+  aimX=clamp(aimX,0,1); aimY=clamp(aimY,0,1); }
 cv.addEventListener('mousemove',e=>setAim(e));
 cv.addEventListener('touchmove',e=>{e.preventDefault();setAim(e);},{passive:false});
 cv.addEventListener('touchstart',e=>{e.preventDefault();setAim(e);},{passive:false});
