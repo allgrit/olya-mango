@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🥭 Оля и манго — укуси, не сломав зуб</title>
+<style>
+  *{ margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ height:100%; overflow:hidden; font-family:'Segoe UI',system-ui,sans-serif;
+    touch-action:none; overscroll-behavior:none; }
+  body{ background:#1a0e14; display:flex; align-items:center; justify-content:center; user-select:none; -webkit-user-select:none; }
+  #wrap{ position:relative; width:100vw; height:100vh; height:100dvh; }
+  canvas{ display:block; width:100%; height:100%; touch-action:none; cursor:crosshair; }
+
+  /* HUD */
+  .hud{ position:absolute; top:12px; left:12px; right:12px; display:flex; justify-content:space-between;
+    align-items:flex-start; pointer-events:none; z-index:10; gap:10px; }
+  .panel{ background:rgba(40,18,28,0.72); backdrop-filter:blur(7px);
+    border:1px solid rgba(255,170,120,0.25); border-radius:14px; padding:9px 15px; color:#ffe8d8;
+    font-size:14px; line-height:1.5; box-shadow:0 6px 24px rgba(0,0,0,0.4); }
+  .panel b{ color:#ffd27a; }
+  .big{ font-size:20px; font-weight:800; }
+  #teethRow{ display:flex; gap:3px; margin-top:6px; }
+  .tooth-ic{ width:15px; height:19px; border-radius:3px 3px 5px 5px; background:#fff;
+    position:relative; box-shadow:inset 0 -2px 0 rgba(0,0,0,.08); transition:.2s; }
+  .tooth-ic.chipped{ background:#fff2cc; clip-path:polygon(0 0,100% 0,100% 70%,60% 100%,40% 80%,0 100%); }
+  .tooth-ic.cracked{ background:#ffe7d8; }
+  .tooth-ic.cracked::after{ content:''; position:absolute; left:50%; top:1px; width:2px; height:80%;
+    background:#a33; transform:translateX(-50%) rotate(8deg); clip-path:polygon(40% 0,60% 20%,40% 45%,60% 70%,45% 100%,35% 70%,55% 45%,35% 20%); }
+  .tooth-ic.broken{ background:#7a4a4a; height:9px; margin-top:10px; }
+  .tooth-ic.diamond{ background:linear-gradient(135deg,#aef0ff,#5cc8e8); box-shadow:0 0 8px rgba(120,230,255,.8); }
+
+  /* нижняя панель силы/кнопка */
+  .bottom{ position:absolute; bottom:14px; left:0; right:0; z-index:10; display:flex; flex-direction:column;
+    align-items:center; gap:10px; padding:0 14px; pointer-events:none; }
+  #powerWrap{ width:min(440px,86vw); height:26px; background:rgba(0,0,0,.45); border-radius:14px;
+    border:1px solid rgba(255,255,255,.18); overflow:hidden; position:relative; }
+  #powerFill{ position:absolute; left:0; top:0; bottom:0; width:0%;
+    background:linear-gradient(90deg,#6ee37e 0%,#ffe24a 55%,#ff5a3a 100%); transition:none; }
+  #powerWrap .zones{ position:absolute; inset:0; display:flex; pointer-events:none; }
+  #powerLabel{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-size:13px; font-weight:700; color:#1a0e14; text-shadow:0 1px 0 rgba(255,255,255,.3); }
+  .biteBtn{ pointer-events:auto; background:linear-gradient(135deg,#ff8a4a,#ff5a3a); color:#fff; border:none;
+    padding:15px 46px; border-radius:16px; font-size:20px; font-weight:800; cursor:pointer;
+    box-shadow:0 8px 26px rgba(255,90,58,.45); transition:transform .1s; letter-spacing:.5px; }
+  .biteBtn:active{ transform:scale(.95); }
+  .topbtns{ position:absolute; top:12px; left:50%; transform:translateX(-50%); display:flex; gap:8px; z-index:11; }
+  button.mini{ pointer-events:auto; background:rgba(40,18,28,0.8); color:#ffe8d8; border:1px solid rgba(255,170,120,.4);
+    padding:9px 13px; border-radius:11px; font-size:15px; cursor:pointer; backdrop-filter:blur(6px); }
+
+  /* оверлеи */
+  .overlay{ position:absolute; inset:0; z-index:20; background:radial-gradient(circle at 50% 35%, rgba(60,26,38,.94), rgba(14,7,10,.97));
+    display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;
+    color:#ffe8d8; padding:22px; overflow-y:auto; }
+  .overlay h1{ font-size:clamp(30px,6vw,58px); margin-bottom:8px; text-shadow:0 4px 20px rgba(0,0,0,.5); }
+  .overlay .sub{ font-size:clamp(14px,2.4vw,19px); opacity:.92; margin-bottom:22px; max-width:600px; line-height:1.6; }
+  .overlay .emoji{ font-size:clamp(56px,13vw,120px); margin-bottom:6px; animation:bob 2s ease-in-out infinite; }
+  @keyframes bob{ 0%,100%{transform:translateY(0) rotate(-4deg)} 50%{transform:translateY(-14px) rotate(4deg)} }
+  .playBtn{ font-size:21px; padding:15px 40px; border-radius:16px; cursor:pointer; border:none; font-weight:800;
+    background:linear-gradient(135deg,#ffb84a,#ff7a3a); color:#3a1500; box-shadow:0 8px 30px rgba(255,150,60,.45);
+    transition:transform .15s; }
+  .playBtn:hover{ transform:scale(1.06); }
+  .hint{ margin-top:16px; font-size:13px; opacity:.7; max-width:520px; line-height:1.55; }
+  .hidden{ display:none !important; }
+
+  /* карточки перков */
+  .perks{ display:flex; gap:14px; flex-wrap:wrap; justify-content:center; margin-bottom:10px; }
+  .perk{ pointer-events:auto; width:170px; background:rgba(40,20,30,.85); border:2px solid rgba(255,180,120,.35);
+    border-radius:16px; padding:16px 14px; cursor:pointer; transition:.15s; text-align:center; }
+  .perk:hover{ transform:translateY(-6px); border-color:#ffd27a; box-shadow:0 10px 30px rgba(255,180,80,.3); }
+  .perk .pic{ font-size:40px; margin-bottom:8px; }
+  .perk .pname{ font-size:16px; font-weight:800; color:#ffd27a; margin-bottom:5px; }
+  .perk .pdesc{ font-size:12.5px; opacity:.85; line-height:1.4; }
+
+  .toast{ position:absolute; top:46%; left:50%; transform:translate(-50%,-50%); font-size:clamp(26px,5.5vw,54px);
+    font-weight:900; color:#fff; text-shadow:0 4px 22px rgba(0,0,0,.7); pointer-events:none; z-index:15; opacity:0;
+    transition:opacity .25s; white-space:nowrap; }
+
+  @media (max-width:560px){
+    .panel{ font-size:12px; padding:7px 11px; }
+    .big{ font-size:16px; }
+    .tooth-ic{ width:12px; height:16px; }
+    .biteBtn{ padding:14px 36px; font-size:18px; }
+    .perk{ width:46%; }
+  }
+  @media (max-height:480px){
+    .biteBtn{ padding:10px 32px; font-size:16px; }
+    #powerWrap{ height:20px; }
+    .bottom{ bottom:8px; gap:6px; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="c"></canvas>
+
+  <div class="hud">
+    <div class="panel">
+      <div class="big">🥭 Манго №<b><span id="mangoNo">1</span></b></div>
+      <div>Съедено: <b><span id="eaten">0</span>%</b> &nbsp; 🏆 <b><span id="score">0</span></b></div>
+    </div>
+    <div class="panel" style="text-align:right">
+      <div>🦷 Зубы Оли</div>
+      <div id="teethRow"></div>
+      <div style="margin-top:4px">Риск зуба: <b><span id="riskLbl">—</span></b></div>
+    </div>
+  </div>
+
+  <div class="topbtns">
+    <button class="mini" id="soundToggle" title="Звук">🔊</button>
+    <button class="mini" id="fsToggle" title="На весь экран">⛶</button>
+  </div>
+
+  <div class="bottom">
+    <div id="powerWrap">
+      <div id="powerFill"></div>
+      <div class="zones"></div>
+      <div id="powerLabel">СИЛА УКУСА</div>
+    </div>
+    <button class="biteBtn" id="biteBtn">КУСАТЬ! 🦷</button>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <!-- стартовое меню -->
+  <div class="overlay" id="menu">
+    <div class="emoji">🥭😬</div>
+    <h1>Оля и манго</h1>
+    <div class="sub">
+      Оля обожает манго, но у неё <b>нежные зубы</b>. 🦷<br>
+      Целься <b>прицелом</b> в манго, поймай нужную <b>силу укуса</b> — и кусай!<br>
+      Слабый укус безопасен, но мало откусишь. Сильный — съешь больше, но рискуешь
+      <b>надколоть, треснуть или сломать</b> зуб. А в центре — твёрдая <b>косточка</b>! 😱
+    </div>
+    <button class="playBtn" id="startBtn">▶ Кусать манго</button>
+    <div class="hint" id="startHint">
+      🖱 Двигай мышью/пальцем — прицел по манго &nbsp;·&nbsp; полоска силы качается сама.<br>
+      <b>Клик / Пробел / кнопка</b> — укусить в момент нужной силы.<br>
+      Съешь 85% мякоти — получишь манго и <b>прокачку</b>. Роглайт: чем дальше, тем тверже! 🌶️
+    </div>
+  </div>
+
+  <!-- выбор перка -->
+  <div class="overlay hidden" id="perkScreen">
+    <div class="emoji">🎉🥭</div>
+    <h1 id="perkTitle">Манго съедено!</h1>
+    <div class="sub" id="perkSub">Оля довольна. Выбери прокачку перед следующим манго:</div>
+    <div class="perks" id="perksBox"></div>
+  </div>
+
+  <!-- конец игры -->
+  <div class="overlay hidden" id="gameover">
+    <div class="emoji">🦷💔</div>
+    <h1>Зубам конец!</h1>
+    <div class="sub" id="goSub"></div>
+    <button class="playBtn" id="retryBtn">▶ Ещё раз</button>
+  </div>
+</div>
+
+<script>
+// ===================== ОСНОВА =====================
+const cv=document.getElementById('c'), ctx=cv.getContext('2d');
+let W=0,H=0,DPR=Math.min(window.devicePixelRatio||1,2);
+function resize(){ W=window.innerWidth; H=window.innerHeight; cv.width=W*DPR; cv.height=H*DPR;
+  cv.style.width=W+'px'; cv.style.height=H+'px'; ctx.setTransform(DPR,0,0,DPR,0,0); }
+window.addEventListener('resize',resize); resize();
+
+// ===================== ЗВУК =====================
+let actx=null, soundOn=true, master=null;
+function initAudio(){ if(actx) return; actx=new (window.AudioContext||window.webkitAudioContext)();
+  master=actx.createGain(); master.gain.value=0.4; master.connect(actx.destination); }
+function tone(f,dur,type='sine',vol=0.3,slide=null){ if(!actx||!soundOn) return;
+  const o=actx.createOscillator(), g=actx.createGain(); o.type=type; o.frequency.value=f;
+  if(slide) o.frequency.exponentialRampToValueAtTime(Math.max(20,slide), actx.currentTime+dur);
+  g.gain.setValueAtTime(vol, actx.currentTime); g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime+dur);
+  o.connect(g); g.connect(master); o.start(); o.stop(actx.currentTime+dur); }
+function noise(dur,vol=0.3,filt=1000,type='lowpass'){ if(!actx||!soundOn) return;
+  const buf=actx.createBuffer(1,actx.sampleRate*dur,actx.sampleRate); const d=buf.getChannelData(0);
+  for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+  const src=actx.createBufferSource(); src.buffer=buf;
+  const f=actx.createBiquadFilter(); f.type=type; f.frequency.value=filt;
+  const g=actx.createGain(); g.gain.setValueAtTime(vol,actx.currentTime); g.gain.exponentialRampToValueAtTime(0.001,actx.currentTime+dur);
+  src.connect(f); f.connect(g); g.connect(master); src.start(); src.stop(actx.currentTime+dur); }
+function sBiteSoft(){ noise(0.16,0.4,1400); tone(220,0.12,'sine',0.2,120); }     // сочный укус мякоти
+function sBiteHard(){ noise(0.13,0.45,2600,'bandpass'); tone(160,0.1,'square',0.18,90); } // хруст
+function sChip(){ tone(1600,0.07,'square',0.3,1200); noise(0.05,0.2,4000,'highpass'); }   // надкол «тик»
+function sCrack(){ tone(900,0.14,'square',0.35,300); noise(0.1,0.25,3000,'highpass'); }    // трещина
+function sBreak(){ tone(300,0.2,'sawtooth',0.4,70); setTimeout(()=>tone(500,0.3,'triangle',0.3,180),60); noise(0.18,0.3,1500); } // слом
+function sOuch(){ tone(620,0.18,'triangle',0.32,420); setTimeout(()=>tone(440,0.22,'triangle',0.28,300),120); } // «ой!»
+function sJuice(){ noise(0.22,0.25,800); }
+function sWin(){ [523,659,784,1046,1318].forEach((f,i)=>setTimeout(()=>tone(f,0.25,'triangle',0.28),i*100)); }
+function sPerk(){ tone(700,0.12,'sine',0.25,1100); setTimeout(()=>tone(1100,0.15,'sine',0.22,1500),90); }
+function sSwing(){ tone(300+pwr*600,0.04,'sine',0.05); } // тиканье метра (тихо)
+function sLose(){ [400,330,260,180].forEach((f,i)=>setTimeout(()=>tone(f,0.35,'sawtooth',0.3,f*0.6),i*180)); }
+
+// ===================== СОСТОЯНИЕ =====================
+function rnd(a,b){ return a+Math.random()*(b-a); }
+function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+
+const TEETH=8;
+let teeth=[];           // состояния зубов: 'healthy'|'chipped'|'cracked'|'broken'|'diamond'
+let state='menu';       // menu|playing|biting|perk|over
+let mangoNo=1, score=0, eaten=0;
+let pwr=0, pwrDir=1, pwrSpeed=1.1;   // полоска силы 0..1 качается
+let aimX=0.5;           // прицел по манго (0..1 по ширине манго)
+let perks={ enamel:0, careful:0, ripe:0, accuracy:0 };  // накопленные перки
+
+// геометрия манго (центр экрана)
+function mangoBox(){ const w=Math.min(W*0.5,360), h=w*0.82; return { cx:W/2, cy:H*0.52, w, h }; }
+
+// анимация
+let jaw=0, jawTarget=0;      // 0 открыт .. 1 сомкнут
+let shake=0, flash=0, painFlash=0;
+let particles=[], biteMarks=[], floaters=[], stuckTeeth=[];  // зубы, оставшиеся в манго
+let lastBite=null;          // {x,y,result,toothIdx}
+let mangoHardBase=1.0;      // сложность текущего манго
+
+function resetGame(){
+  teeth=[]; for(let i=0;i<TEETH;i++) teeth.push('healthy');
+  mangoNo=1; score=0; perks={enamel:0,careful:0,ripe:0,accuracy:0};
+  startMango();
+}
+function startMango(){
+  eaten=0; mangoHardBase = 1.0 + (mangoNo-1)*0.13 - perks.ripe*0.12;
+  mangoHardBase = Math.max(0.7, mangoHardBase);
+  biteMarks=[]; particles=[]; floaters=[]; stuckTeeth=[];
+  pwr=0; pwrDir=1; pwrSpeed = 1.1 - perks.careful*0.16; pwrSpeed=Math.max(0.5,pwrSpeed);
+  aimX=0.5; jaw=0; jawTarget=0;
+  state='playing';
+  updateHUD();
+}
+
+// твёрдость зоны по прицелу (0..1): центр = косточка
+function hardnessAt(ax){
+  const d=Math.abs(ax-0.5)*2;          // 0 центр .. 1 край
+  // косточка в центре (d<0.28): очень твёрдо; мякоть середина; кожура у края
+  let h;
+  if(d<0.26) h = 0.95 - d*0.3;          // косточка
+  else if(d>0.82) h = 0.34 + (d-0.82)*0.4; // кожура
+  else h = 0.16 + Math.abs(d-0.5)*0.1;  // мякоть
+  return clamp(h*mangoHardBase, 0.05, 1.1);
+}
+function fleshAt(ax){  // сколько мякоти можно откусить (центр-косточка = мало)
+  const d=Math.abs(ax-0.5)*2;
+  if(d<0.24) return 0.06;               // косточка — есть нечего
+  if(d>0.9) return 0.4;                 // кожура
+  return 1.0;
+}
+// текущий зуб по прицелу
+function toothAt(ax){ return clamp(Math.floor(ax*TEETH),0,TEETH-1); }
+
+// риск поломки зуба за укус при данных power+aim
+function biteRisk(power, ax){
+  const h=hardnessAt(ax); const ti=toothAt(ax); const st=teeth[ti];
+  if(st==='diamond') return 0;
+  const stateMult = st==='healthy'?1 : st==='chipped'?1.5 : st==='cracked'?2.5 : 0.0;
+  if(st==='broken') return 0; // сломанный зуб не кусает
+  const enamel = 1 - perks.enamel*0.22;
+  let risk = Math.pow(power,1.8) * (0.22 + h*1.7) * stateMult * enamel;
+  return clamp(risk, 0, 0.97);
+}
+
+// ===================== HUD =====================
+const $=id=>document.getElementById(id);
+function updateHUD(){
+  $('mangoNo').textContent=mangoNo; $('eaten').textContent=Math.floor(eaten);
+  $('score').textContent=score;
+  const row=$('teethRow'); row.innerHTML='';
+  for(const t of teeth){ const d=document.createElement('div'); d.className='tooth-ic '+(t==='healthy'?'':t); row.appendChild(d); }
+  // текущий риск
+  const r=biteRisk(pwr,aimX);
+  const lbl=$('riskLbl');
+  if(state!=='playing'){ lbl.textContent='—'; lbl.style.color='#ffe8d8'; }
+  else{ const pct=Math.round(r*100); lbl.textContent=pct+'%';
+    lbl.style.color = r<0.12?'#7ee37e' : r<0.35?'#ffe24a' : r<0.6?'#ff9a4a' : '#ff5a3a'; }
+}
+
+let toastT=null;
+function showToast(txt,color){ const t=$('toast'); t.textContent=txt; t.style.color=color||'#fff'; t.style.opacity='1';
+  clearTimeout(toastT); toastT=setTimeout(()=>t.style.opacity='0',1100); }
+
+// ===================== УКУС =====================
+function doBite(){
+  if(state!=='playing') return;
+  const power=pwr, ax=aimX;
+  const ti=toothAt(ax), h=hardnessAt(ax);
+  state='biting'; jawTarget=1;
+  const box=mangoBox(); const bx=box.cx+(ax-0.5)*box.w*0.8, by=box.cy+rnd(-box.h*0.12,box.h*0.12);
+  lastBite={x:bx,y:by,ti,power,ax,t:0};
+
+  // через момент смыкания — результат
+  setTimeout(()=>resolveBite(power,ax,ti,h,bx,by), 170);
+}
+function resolveBite(power,ax,ti,h,bx,by){
+  const st=teeth[ti];
+  const flesh=fleshAt(ax);
+  // сколько съели
+  const gained = power * 16 * flesh * (1+perks.accuracy*0.3);
+  if(flesh>0.2){ eaten=Math.min(100, eaten+gained);
+    for(let i=0;i<14;i++) particles.push(juiceP(bx,by));
+    biteMarks.push({ax, r:rnd(0.10,0.16)+power*0.06});
+    (power>0.6? sBiteHard : sBiteSoft)(); sJuice();
+  } else {
+    // укусил косточку — глухой удар
+    sBiteHard();
+  }
+
+  // проверка зуба
+  let result='safe';
+  if(st!=='broken' && st!=='diamond'){
+    const risk=biteRisk(power,ax);
+    if(Math.random()<risk){
+      const severity = power*0.55 + h*0.6 + (Math.abs(ax-0.5)<0.13?0.4:0);
+      if(st==='cracked' || severity>0.95){
+        teeth[ti]='broken';
+        // драматичный исход: при сильном укусе зуб вырывается и остаётся в манго
+        if(power>0.66 && Math.random()<0.55){ result='stuck'; stuckTeeth.push({ax, t:0}); }
+        else result='break';
+      }
+      else if(st==='chipped' || severity>0.55){ teeth[ti]='cracked'; result='crack'; }
+      else { teeth[ti]='chipped'; result='chip'; }
+    }
+  }
+  applyBiteFx(result,bx,by,ti);
+  lastBite.result=result;
+
+  setTimeout(()=>{ jawTarget=0;
+    // конец укуса → проверки
+    const broken=teeth.filter(t=>t==='broken').length;
+    if(broken>=6){ setTimeout(gameOver,500); return; }
+    if(eaten>=85){ setTimeout(winMango,450); return; }
+    state='playing'; updateHUD();
+  }, 180);
+}
+let box_cyCache=0;
+function applyBiteFx(result,bx,by,ti){
+  updateHUD();
+  if(result==='safe'){ floaters.push(floatTxt('ням!','#7ee37e',bx,by)); return; }
+  shake=Math.min(1, shake+ (result==='break'?1: result==='crack'?0.6:0.35));
+  if(result==='chip'){ sChip(); painFlash=0.35; showToast('НАДКОЛ! 😬','#ffd24a');
+    floaters.push(floatTxt('скол','#ffd24a',bx,by)); for(let i=0;i<6;i++) particles.push(chipP(bx,by,'#fff2cc')); }
+  else if(result==='crack'){ sCrack(); painFlash=0.6; sOuch(); showToast('ТРЕЩИНА! 😖','#ff9a4a');
+    floaters.push(floatTxt('треск!','#ff9a4a',bx,by)); for(let i=0;i<10;i++) particles.push(chipP(bx,by,'#ffe7d8')); }
+  else if(result==='break'){ sBreak(); painFlash=1; sOuch(); flash=0.7; showToast('ЗУБ СЛОМАН! 💥🦷','#ff5a3a');
+    floaters.push(floatTxt('КРАК!','#ff5a3a',bx,by)); for(let i=0;i<18;i++) particles.push(chipP(bx,by,'#fff')); }
+  else if(result==='stuck'){ sBreak(); painFlash=1; sOuch(); flash=0.85; shake=1; showToast('ЗУБ ОСТАЛСЯ В МАНГО! 😱🦷','#ff3a5a');
+    floaters.push(floatTxt('🦷 застрял!','#ff3a5a',bx,by)); for(let i=0;i<22;i++) particles.push(chipP(bx,by,'#fff')); }
+}
+
+function winMango(){
+  state='perk'; score++; sWin();
+  for(let k=0;k<28;k++) setTimeout(()=>{ const x=rnd(W*0.25,W*0.75),y=rnd(H*0.2,H*0.5);
+    for(let i=0;i<10;i++) particles.push(confettiP(x,y)); }, k*45);
+  // восстановление от перков уже применено; показать выбор
+  $('perkTitle').textContent = `Манго №${mangoNo} съедено! 🥭`;
+  $('perkSub').textContent = `Оля счастлива (зубов целых: ${teeth.filter(t=>t==='healthy'||t==='diamond').length}/${TEETH}). Выбери прокачку:`;
+  renderPerks();
+  $('perkScreen').classList.remove('hidden');
+}
+
+function gameOver(){
+  state='over'; sLose();
+  $('goSub').innerHTML = `Оля сломала слишком много зубов и поехала к стоматологу. 🦷🚑<br>
+    Съедено манго: <b>${score}</b> &nbsp;·&nbsp; рекорд: <b>${bestScore()}</b><br>
+    ${score>=loadBest()?'🏆 Новый рекорд!':''}`;
+  saveBest(score);
+  $('gameover').classList.remove('hidden');
+}
+
+// ===================== ПЕРКИ =====================
+const PERK_POOL=[
+  { key:'enamel', pic:'🦷', name:'Крепкая эмаль', desc:'−22% к риску сломать зуб', apply:()=>perks.enamel++ },
+  { key:'calcium', pic:'🥛', name:'Кальций', desc:'Лечит 1 повреждённый зуб', apply:()=>healOne() },
+  { key:'careful', pic:'🧘', name:'Осторожный укус', desc:'Полоска силы качается медленнее', apply:()=>perks.careful++ },
+  { key:'ripe', pic:'🍯', name:'Спелое манго', desc:'Следующие манго мягче', apply:()=>perks.ripe++ },
+  { key:'crown', pic:'💎', name:'Алмазная коронка', desc:'1 зуб не ломается никогда', apply:()=>diamondOne() },
+  { key:'accuracy', pic:'🎯', name:'Меткий укус', desc:'+30% мякоти за укус', apply:()=>perks.accuracy++ },
+];
+function healOne(){ const i=teeth.findIndex(t=>t==='broken'); const j= i>=0?i:teeth.findIndex(t=>t==='cracked');
+  const k= j>=0?j:teeth.findIndex(t=>t==='chipped'); if(k>=0) teeth[k]='healthy'; }
+function diamondOne(){ const i=teeth.findIndex(t=>t==='healthy'); if(i>=0) teeth[i]='diamond';
+  else { const j=teeth.findIndex(t=>t!=='diamond'); if(j>=0) teeth[j]='diamond'; } }
+function renderPerks(){
+  const pool=[...PERK_POOL].sort(()=>Math.random()-0.5).slice(0,3);
+  const box=$('perksBox'); box.innerHTML='';
+  for(const p of pool){ const d=document.createElement('div'); d.className='perk';
+    d.innerHTML=`<div class="pic">${p.pic}</div><div class="pname">${p.name}</div><div class="pdesc">${p.desc}</div>`;
+    d.onclick=()=>{ sPerk(); p.apply(); $('perkScreen').classList.add('hidden'); mangoNo++; startMango(); };
+    box.appendChild(d); }
+}
+
+// ===================== РЕКОРД =====================
+function loadBest(){ try{ return +localStorage.getItem('olyaMangoBest')||0; }catch(e){ return 0; } }
+function saveBest(s){ try{ if(s>loadBest()) localStorage.setItem('olyaMangoBest',s); }catch(e){} }
+function bestScore(){ return Math.max(loadBest(),score); }
+
+// ===================== ЧАСТИЦЫ =====================
+function juiceP(x,y){ return {x,y,vx:rnd(-120,120),vy:rnd(-220,-40),g:560,r:rnd(3,7),life:1,c:`hsl(${rnd(28,46)},95%,${rnd(50,65)}%)`}; }
+function chipP(x,y,c){ return {x,y,vx:rnd(-180,180),vy:rnd(-260,-60),g:680,r:rnd(2,5),life:1,c}; }
+function confettiP(x,y){ return {x,y,vx:rnd(-140,140),vy:rnd(-200,-20),g:300,r:rnd(3,6),life:1,c:`hsl(${rnd(0,360)},90%,62%)`}; }
+function floatTxt(t,c,x,y){ return {t,c,x,y,life:1}; }
+
+// ===================== РЕНДЕР =====================
+function drawBG(){
+  const g=ctx.createRadialGradient(W/2,H*0.45,40, W/2,H*0.5,Math.max(W,H)*0.7);
+  g.addColorStop(0,'#3a2030'); g.addColorStop(1,'#180c12'); ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  // мягкое боке
+  for(let i=0;i<22;i++){ const x=(i*197.3)%W, y=(i*331.7)%H, r=((i*53)%40)+10;
+    ctx.fillStyle=`rgba(255,${150+i%80},${90+i%60},0.04)`; ctx.beginPath(); ctx.arc(x,y,r,0,7); ctx.fill(); }
+}
+
+// рисуем губы + челюсти Ольги крупным планом, манго в центре
+function drawScene(){
+  const box=mangoBox(); box_cyCache=box.cy;
+  const jx = jaw; // 0..1 смыкание
+  ctx.save();
+  if(shake>0){ ctx.translate(rnd(-1,1)*shake*16, rnd(-1,1)*shake*16); }
+
+  // ----- ВЕРХНЯЯ ГУБА + ВЕРХНИЕ ЗУБЫ -----
+  const upJawY = box.cy - box.h*0.62 + jx*box.h*0.40;   // нижний край верхних зубов
+  const loJawY = box.cy + box.h*0.62 - jx*box.h*0.40;   // верхний край нижних зубов
+  // верхняя губа
+  drawLip(box.cx, upJawY-90 - jx*30, box.w*1.7, 80, true);
+  // верхняя десна
+  ctx.fillStyle='#e87a8a';
+  ctx.beginPath(); ctx.moveTo(box.cx-box.w*0.85, upJawY-60);
+  ctx.quadraticCurveTo(box.cx, upJawY-95, box.cx+box.w*0.85, upJawY-60);
+  ctx.lineTo(box.cx+box.w*0.85, upJawY); ctx.lineTo(box.cx-box.w*0.85, upJawY); ctx.closePath(); ctx.fill();
+  drawTeeth(box, upJawY, true);
+
+  // ----- МАНГО (между челюстями) -----
+  drawMango(box, jx);
+
+  // ----- НИЖНЯЯ ДЕСНА + НИЖНИЕ ЗУБЫ + ГУБА -----
+  ctx.fillStyle='#e87a8a';
+  ctx.beginPath(); ctx.moveTo(box.cx-box.w*0.85, loJawY+60);
+  ctx.quadraticCurveTo(box.cx, loJawY+95, box.cx+box.w*0.85, loJawY+60);
+  ctx.lineTo(box.cx+box.w*0.85, loJawY); ctx.lineTo(box.cx-box.w*0.85, loJawY); ctx.closePath(); ctx.fill();
+  drawTeeth(box, loJawY, false);
+  drawLip(box.cx, loJawY+90 + jx*30, box.w*1.7, 80, false);
+
+  // прицел
+  if(state==='playing'){
+    const px=box.cx+(aimX-0.5)*box.w*0.8;
+    ctx.strokeStyle='rgba(255,255,255,.85)'; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.arc(px,box.cy,16+Math.sin(perfNow()*0.006)*3,0,7); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(px-24,box.cy); ctx.lineTo(px-8,box.cy); ctx.moveTo(px+8,box.cy); ctx.lineTo(px+24,box.cy);
+    ctx.moveTo(px,box.cy-24); ctx.lineTo(px,box.cy-8); ctx.moveTo(px,box.cy+8); ctx.lineTo(px,box.cy+24); ctx.stroke();
+    // подсказка зоны
+    const h=hardnessAt(aimX);
+    ctx.fillStyle = h>0.7?'rgba(255,90,58,.9)': h>0.4?'rgba(255,180,70,.9)':'rgba(126,227,126,.9)';
+    ctx.font='bold 13px Segoe UI'; ctx.textAlign='center';
+    ctx.fillText(h>0.7?'⚠ КОСТОЧКА':h>0.45?'кожура':'🍑 мякоть', px, box.cy-30);
+  }
+  ctx.restore();
+
+  // вспышка боли (виньетка)
+  if(painFlash>0){ ctx.fillStyle=`rgba(255,40,40,${painFlash*0.33})`; ctx.fillRect(0,0,W,H); }
+  if(flash>0){ ctx.fillStyle=`rgba(255,255,255,${flash*0.5})`; ctx.fillRect(0,0,W,H); }
+}
+
+function drawLip(cx,cy,w,h,upper){
+  ctx.fillStyle='#c43a55';
+  ctx.beginPath();
+  if(upper){ ctx.moveTo(cx-w/2,cy); ctx.quadraticCurveTo(cx,cy-h, cx+w/2,cy);
+    ctx.quadraticCurveTo(cx,cy+h*0.5, cx-w/2,cy); }
+  else{ ctx.moveTo(cx-w/2,cy); ctx.quadraticCurveTo(cx,cy+h, cx+w/2,cy);
+    ctx.quadraticCurveTo(cx,cy-h*0.5, cx-w/2,cy); }
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,.12)';
+  ctx.beginPath(); ctx.ellipse(cx,cy+(upper?-h*0.3:h*0.3),w*0.3,h*0.12,0,0,7); ctx.fill();
+}
+
+function drawTeeth(box, jawY, upper){
+  const n=TEETH, tw=box.w*1.5/n, startX=box.cx-box.w*0.75;
+  for(let i=0;i<n;i++){
+    const st=teeth[i]; const x=startX+tw*i+tw/2;
+    const th=upper? 56:54;
+    const top = upper? jawY : jawY-th;
+    ctx.save(); ctx.translate(x, upper? jawY : jawY);
+    const dir = upper?1:-1;  // верхние растут вниз, нижние вверх
+    // тело зуба
+    if(st==='broken'){
+      ctx.fillStyle='#c98a8a'; // пенёк
+      rr(-tw*0.34, upper?0:-14*dir, tw*0.68, 14, 4); ctx.fill();
+    } else {
+      let col = st==='diamond' ? '#bdeeff' : st==='chipped' ? '#fff2cc' : st==='cracked' ? '#fbe9e0' : '#ffffff';
+      ctx.fillStyle=col;
+      const hh=th;
+      ctx.beginPath();
+      const y0= upper? 0 : 0;
+      const ye= upper? hh : -hh;
+      // зуб со скруглённым «жевательным» концом
+      ctx.moveTo(-tw*0.40, 0);
+      ctx.lineTo(tw*0.40, 0);
+      ctx.lineTo(tw*0.40, ye*0.7);
+      ctx.quadraticCurveTo(tw*0.40, ye, 0, ye);
+      ctx.quadraticCurveTo(-tw*0.40, ye, -tw*0.40, ye*0.7);
+      ctx.closePath(); ctx.fill();
+      // тень/объём
+      ctx.fillStyle='rgba(0,0,0,.06)'; rr(tw*0.18, upper?0:ye, tw*0.22, Math.abs(ye), 0); ctx.fill();
+      if(st==='diamond'){ ctx.strokeStyle='rgba(120,230,255,.9)'; ctx.lineWidth=2; ctx.stroke();
+        ctx.fillStyle='rgba(255,255,255,.6)'; ctx.beginPath(); ctx.arc(-tw*0.12,ye*0.5,2.5,0,7); ctx.fill(); }
+      if(st==='chipped'){ ctx.fillStyle='#3a2030'; // вырез уголка
+        ctx.beginPath(); ctx.moveTo(tw*0.40,ye*0.55); ctx.lineTo(tw*0.40,ye); ctx.lineTo(tw*0.12,ye); ctx.closePath(); ctx.fill(); }
+      if(st==='cracked'){ ctx.strokeStyle='#a33'; ctx.lineWidth=2.2; ctx.beginPath();
+        ctx.moveTo(0,upper?2:ye+2); let yy=upper?2:ye+2; const sgn=upper?1:-1;
+        for(let s=0;s<4;s++){ yy+=sgn*Math.abs(ye)/4; ctx.lineTo((s%2?6:-6), yy); } ctx.stroke(); }
+    }
+    ctx.restore();
+  }
+  // подсветка укушенного зуба
+  if(lastBite && jaw>0.2 && ((upper&& true))){
+    // лёгкое мерцание ничего — пропускаем
+  }
+}
+function rr(x,y,w,h,r){ ctx.beginPath(); if(ctx.roundRect) ctx.roundRect(x,y,w,h,r); else ctx.rect(x,y,w,h); }
+
+function drawMango(box,jx){
+  const eatenFrac=eaten/100;
+  // манго сжимается по мере поедания
+  const scale = 1 - eatenFrac*0.45;
+  const mw=box.w*0.62*scale, mh=box.h*0.7*scale;
+  ctx.save(); ctx.translate(box.cx, box.cy);
+  // тело манго (градиент)
+  const g=ctx.createLinearGradient(-mw,-mh,mw,mh);
+  g.addColorStop(0,'#ffd24a'); g.addColorStop(0.5,'#ff9e2c'); g.addColorStop(1,'#ff6a3a');
+  ctx.fillStyle=g;
+  ctx.beginPath(); ctx.ellipse(0,0,mw,mh,0.1,0,7); ctx.fill();
+  // румянец
+  ctx.fillStyle='rgba(220,40,40,.32)'; ctx.beginPath(); ctx.ellipse(-mw*0.3,-mh*0.3,mw*0.5,mh*0.45,0.2,0,7); ctx.fill();
+  // блик
+  ctx.fillStyle='rgba(255,255,255,.4)'; ctx.beginPath(); ctx.ellipse(-mw*0.35,-mh*0.4,mw*0.18,mh*0.12,0.3,0,7); ctx.fill();
+  // следы укусов (выемки по краю манго)
+  ctx.fillStyle='#3a2030';
+  for(const bm of biteMarks){
+    const bx=(bm.ax-0.5)*mw*1.5, by=(Math.abs(bm.ax-0.5)<0.25? -mh*0.55 : 0);
+    ctx.beginPath(); ctx.arc(bx, by, mw*bm.r, 0,7); ctx.fill(); }
+  // косточка проступает когда много съели
+  if(eatenFrac>0.45){ ctx.fillStyle=`rgba(230,210,170,${(eatenFrac-0.45)*1.6})`;
+    ctx.beginPath(); ctx.ellipse(0,0,mw*0.34,mh*0.55,0,0,7); ctx.fill();
+    ctx.strokeStyle=`rgba(180,150,110,${(eatenFrac-0.45)})`; ctx.lineWidth=2;
+    for(let i=-2;i<=2;i++){ ctx.beginPath(); ctx.moveTo(i*mw*0.1,-mh*0.5); ctx.quadraticCurveTo(i*mw*0.16,0,i*mw*0.1,mh*0.5); ctx.stroke(); } }
+  // зубы, застрявшие в манго 🦷
+  for(const stk of stuckTeeth){
+    const sx=(stk.ax-0.5)*mw*1.2;
+    ctx.save(); ctx.translate(sx, mh*0.04); ctx.rotate((stk.ax-0.5)*0.7); ctx.scale(1.5,1.5);
+    // потёк сока/крови у основания
+    ctx.fillStyle='rgba(190,30,40,.5)'; ctx.beginPath(); ctx.ellipse(0,9,12,8,0,0,7); ctx.fill();
+    // сам зуб (торчит корнем вниз)
+    ctx.fillStyle='#fff'; ctx.beginPath();
+    ctx.moveTo(-8,-24); ctx.quadraticCurveTo(-9,-26,-6,-26); ctx.lineTo(6,-26); ctx.quadraticCurveTo(9,-26,8,-24);
+    ctx.lineTo(9,6); ctx.quadraticCurveTo(0,15,-9,6); ctx.closePath(); ctx.fill();
+    // корень-тень
+    ctx.fillStyle='rgba(0,0,0,.10)'; ctx.fillRect(2,-22,4,32);
+    ctx.fillStyle='rgba(255,255,255,.6)'; ctx.fillRect(-5,-22,2.5,26); // блик
+    ctx.strokeStyle='rgba(150,120,120,.5)'; ctx.lineWidth=1; ctx.stroke();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+// floaters (всплывающий текст)
+function drawFloaters(dt){
+  for(let i=floaters.length-1;i>=0;i--){ const f=floaters[i]; f.y-=40*dt; f.life-=dt*1.2;
+    ctx.globalAlpha=Math.max(0,f.life); ctx.fillStyle=f.c; ctx.font='bold 22px Segoe UI'; ctx.textAlign='center';
+    ctx.fillText(f.t,f.x,f.y); ctx.globalAlpha=1; if(f.life<=0) floaters.splice(i,1); }
+}
+
+// ===================== ЦИКЛ =====================
+let last=performance.now(); let _now=last;
+function perfNow(){ return _now; }
+function loop(now){ _now=now; const dt=Math.min(0.05,(now-last)/1000); last=now;
+  drawBG();
+
+  if(state==='playing'){
+    // качаем силу
+    pwr+=pwrDir*pwrSpeed*dt; if(pwr>=1){pwr=1;pwrDir=-1;} if(pwr<=0){pwr=0;pwrDir=1;}
+    const pf=$('powerFill'); pf.style.width=(pwr*100)+'%';
+    if(Math.random()<0.06) sSwing();
+    if((now*0.06|0)%3===0) updateHUD();
+  }
+  // анимация челюсти
+  jaw += (jawTarget-jaw)*Math.min(1,dt*14);
+  shake*=(1-dt*4); if(shake<0.01) shake=0;
+  flash*=(1-dt*3.5); painFlash*=(1-dt*2.2);
+
+  drawScene();
+
+  // частицы
+  for(let i=particles.length-1;i>=0;i--){ const p=particles[i]; p.vy+=p.g*dt; p.x+=p.vx*dt; p.y+=p.vy*dt; p.life-=dt*1.3;
+    ctx.globalAlpha=Math.max(0,p.life); ctx.fillStyle=p.c; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,7); ctx.fill(); ctx.globalAlpha=1;
+    if(p.life<=0||p.y>H+20) particles.splice(i,1); }
+  drawFloaters(dt);
+
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// ===================== УПРАВЛЕНИЕ =====================
+const isTouch=matchMedia('(pointer: coarse)').matches;
+function setAim(e){ if(state!=='playing') return; const r=cv.getBoundingClientRect();
+  const t=(e.touches&&e.touches[0])||e; const x=t.clientX-r.left; const box=mangoBox();
+  aimX=clamp(0.5+(x-box.cx)/(box.w*0.8),0,1); }
+cv.addEventListener('mousemove',e=>setAim(e));
+cv.addEventListener('touchmove',e=>{e.preventDefault();setAim(e);},{passive:false});
+cv.addEventListener('touchstart',e=>{e.preventDefault();setAim(e);},{passive:false});
+function tryBite(){ if(state==='playing') doBite(); }
+cv.addEventListener('click',()=>tryBite());
+$('biteBtn').addEventListener('click',(e)=>{ e.stopPropagation(); tryBite(); });
+window.addEventListener('keydown',e=>{ if(e.code==='Space'){ e.preventDefault(); tryBite(); } });
+
+$('soundToggle').onclick=function(){ soundOn=!soundOn; this.textContent=soundOn?'🔊':'🔇'; };
+$('fsToggle').onclick=function(){ const el=document.documentElement;
+  if(!document.fullscreenElement){ (el.requestFullscreen||el.webkitRequestFullscreen||function(){}).call(el); }
+  else { (document.exitFullscreen||document.webkitExitFullscreen||function(){}).call(document); }
+  setTimeout(resize,200); };
+
+function startGame(){ initAudio(); $('menu').classList.add('hidden'); $('gameover').classList.add('hidden');
+  resetGame(); }
+$('startBtn').onclick=startGame;
+$('retryBtn').onclick=startGame;
+
+// подсказка для тача
+if(isTouch){ const sh=$('startHint'); if(sh) sh.innerHTML=
+  '👆 Веди пальцем — прицел по манго &nbsp;·&nbsp; полоска силы качается сама.<br>'+
+  'Жми <b>КУСАТЬ!</b> в момент нужной силы. Слабо — безопасно, сильно — рискованно.<br>'+
+  'Съешь 85% мякоти → прокачка. Чем дальше — тем тверже манго! 🌶️'; }
+</script>
+</body>
+</html>
